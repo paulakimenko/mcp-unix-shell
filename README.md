@@ -8,6 +8,7 @@ Go server implementing Model Context Protocol (MCP) for executing shell commands
 - List previous command executions
 - Safety features to limit allowed commands
 - Configure allowed command set for security
+- Configurable per-command execution timeout
 
 **Note**: The server will only allow execution of commands specified via the allowedCommands parameter or all commands if configured with "*".
 
@@ -66,6 +67,21 @@ To allow all commands (use with caution):
       "command": "mcp-unix-shell",
       "args": [
         "--allowed-commands=*"
+      ]
+    }
+  }
+}
+```
+
+To change the per-command timeout (defaults to `30s`), pass `--timeout` with a Go duration such as `90s`, `5m` or `1h`:
+```json
+{
+  "mcpServers": {
+    "shell": {
+      "command": "mcp-unix-shell",
+      "args": [
+        "--allowed-commands=ls,cat,echo,find",
+        "--timeout=2m"
       ]
     }
   }

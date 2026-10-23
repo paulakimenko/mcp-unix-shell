@@ -19,7 +19,7 @@ import (
 const (
 	DEFAULT_LIMIT    = 10               // Default number of commands to list
 	DEFAULT_SHELL    = "bash"           // Default shell to use
-	COMMAND_TIMEOUT  = 30 * time.Second // Default timeout for commands
+	DEFAULT_TIMEOUT  = 30 * time.Second // Default timeout for commands
 	MAX_OUTPUT_SIZE  = 1024 * 1024      // 1MB max output size
 	MAX_HISTORY_SIZE = 100              // Maximum commands to keep in history
 )
@@ -39,13 +39,18 @@ type CommandExecution struct {
 type ShellServer struct {
 	allowedCommands  []string
 	allowAllCommands bool
+	commandTimeout   time.Duration
 	commandHistory   []CommandExecution
 	historyMutex     sync.Mutex
 	server           *server.MCPServer
 }
 
-// NewShellServer creates a new shell server with the given allowed commands
-func NewShellServer(allowedCommands string) (*ShellServer, error) {
+// NewShellServer creates a new shell server with the given allowed commands and command timeout
+func NewShellServer(allowedCommands string, timeout time.Duration) (*ShellServer, error) {
+	if timeout <= 0 {
+		return nil, fmt.Errorf("timeout must be positive, got %s", timeout)
+	}
+
 	var cmdList []string
 	allowAll := false
 
@@ -66,6 +71,7 @@ func NewShellServer(allowedCommands string) (*ShellServer, error) {
 	s := &ShellServer{
 		allowedCommands:  cmdList,
 		allowAllCommands: allowAll,
+		commandTimeout:   timeout,
 		commandHistory:   make([]CommandExecution, 0, MAX_HISTORY_SIZE),
 		server: server.NewMCPServer(
 			"unix-shell-server",
@@ -178,7 +184,7 @@ func (s *ShellServer) executeCommand(command string, shell string) CommandExecut
 	}
 
 	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), COMMAND_TIMEOUT)
+	ctx, cancel := context.WithTimeout(context.Background(), s.commandTimeout)
 	defer cancel()
 
 	// Create the command
@@ -200,7 +206,7 @@ func (s *ShellServer) executeCommand(command string, shell string) CommandExecut
 	// Handle different error types
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			execution.Output += "\n\nError: Command execution timed out after 30 seconds."
+			execution.Output += fmt.Sprintf("\n\nError: Command execution timed out after %s.", s.commandTimeout)
 			execution.ExitCode = 124 // Common timeout exit code
 		} else if exitError, ok := err.(*exec.ExitError); ok {
 			execution.ExitCode = exitError.ExitCode()
@@ -391,6 +397,7 @@ func (s *ShellServer) Serve() error {
 func main() {
 	// Parse command line flags
 	allowedCommandsFlag := flag.String("allowed-commands", "", "Comma-separated list of allowed commands or '*' to allow all commands")
+	timeoutFlag := flag.Duration("timeout", DEFAULT_TIMEOUT, "Maximum execution time per command (e.g. 30s, 2m, 1h)")
 	flag.Parse()
 
 	if *allowedCommandsFlag == "" {
@@ -401,16 +408,16 @@ func main() {
 	}
 
 	// Create and start the server
-	shellServer, err := NewShellServer(*allowedCommandsFlag)
+	shellServer, err := NewShellServer(*allowedCommandsFlag, *timeoutFlag)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 
 	// Log the server configuration
 	if shellServer.allowAllCommands {
-		log.Println("Starting shell server with all commands allowed ('*' mode)")
+		log.Printf("Starting shell server with all commands allowed ('*' mode), timeout %s", shellServer.commandTimeout)
 	} else {
-		log.Printf("Starting shell server with %d allowed commands", len(shellServer.allowedCommands))
+		log.Printf("Starting shell server with %d allowed commands, timeout %s", len(shellServer.allowedCommands), shellServer.commandTimeout)
 	}
 
 	// Serve requests

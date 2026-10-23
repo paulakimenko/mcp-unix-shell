@@ -12,13 +12,17 @@ startCommand:
         type: string
         description: Comma-separated list of allowed commands, or "*" to allow all commands.
         default: "ls,cat,echo,find,pwd"
+      timeout:
+        type: string
+        description: Maximum execution time per command as a Go duration (e.g. "30s", "2m").
+        default: "30s"
   commandFunction:
     # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
     |-
     (config) => { 
       return { 
         command: './server', 
-        args: [`--allowed-commands=${config.allowedCommands}`] 
+        args: [`--allowed-commands=${config.allowedCommands}`, `--timeout=${config.timeout || "30s"}`] 
       }; 
     }
   exampleConfig:
