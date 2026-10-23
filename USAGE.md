@@ -90,4 +90,4 @@ You need to add the command to your allowed list in the configuration.
 
 ### Timeout Errors
 
-Commands have a 30-second execution timeout. For long-running tasks, consider breaking them down into smaller commands or increasing the timeout in the source code.
+Commands have a 30-second execution timeout by default. Commands that exceed it are killed and reported with exit code 124. For long-running tasks, increase the timeout with the `--timeout` flag (e.g. `--timeout=5m`), or break the work down into smaller commands.

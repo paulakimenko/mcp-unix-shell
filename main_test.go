@@ -136,7 +136,7 @@ func TestGetHistory(t *testing.T) {
 
 func TestNewShellServer(t *testing.T) {
 	// Test with specific allowed commands
-	server, err := NewShellServer("ls,cat,echo")
+	server, err := NewShellServer("ls,cat,echo", DEFAULT_TIMEOUT)
 	if err != nil {
 		t.Fatalf("NewShellServer failed: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestNewShellServer(t *testing.T) {
 	}
 
 	// Test with all commands allowed
-	serverAll, err := NewShellServer("*")
+	serverAll, err := NewShellServer("*", DEFAULT_TIMEOUT)
 	if err != nil {
 		t.Fatalf("NewShellServer failed: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestNewShellServer(t *testing.T) {
 	}
 
 	// Test with empty commands
-	serverEmpty, err := NewShellServer("")
+	serverEmpty, err := NewShellServer("", DEFAULT_TIMEOUT)
 	if err != nil {
 		t.Fatalf("NewShellServer failed: %v", err)
 	}
@@ -171,5 +171,40 @@ func TestNewShellServer(t *testing.T) {
 
 	if serverEmpty.allowAllCommands {
 		t.Errorf("serverEmpty.allowAllCommands = true, want false")
+	}
+}
+
+func TestNewShellServerTimeout(t *testing.T) {
+	server, err := NewShellServer("*", 5*time.Second)
+	if err != nil {
+		t.Fatalf("NewShellServer failed: %v", err)
+	}
+
+	if server.commandTimeout != 5*time.Second {
+		t.Errorf("server.commandTimeout = %s, want 5s", server.commandTimeout)
+	}
+
+	// Test with invalid timeouts
+	for _, timeout := range []time.Duration{0, -time.Second} {
+		if _, err := NewShellServer("*", timeout); err == nil {
+			t.Errorf("NewShellServer with timeout %s succeeded, want error", timeout)
+		}
+	}
+}
+
+func TestExecuteCommandTimeout(t *testing.T) {
+	server, err := NewShellServer("*", 100*time.Millisecond)
+	if err != nil {
+		t.Fatalf("NewShellServer failed: %v", err)
+	}
+
+	execution := server.executeCommand("sleep 5", "bash")
+
+	if execution.ExitCode != 124 {
+		t.Errorf("execution.ExitCode = %d, want 124", execution.ExitCode)
+	}
+
+	if execution.ExecutionMs >= 5000 {
+		t.Errorf("execution took %d ms, want it to be killed by the timeout", execution.ExecutionMs)
 	}
 }
